@@ -1,18 +1,20 @@
-FROM acidrain/python-poetry:3.11-alpine as build-stage
-RUN apk add binutils
+FROM ghcr.io/astral-sh/uv:python3.12-alpine AS builder
 WORKDIR /app
-COPY ./pyproject.toml ./poetry.lock /app/
-RUN --mount=type=cache,id=poetry-cache,target=/root/.cache/pypoetry/cache \
-  --mount=type=cache,id=poetry-artifacts,target=/root/.cache/pypoetry/artifacts \
-  poetry install --no-interaction --no-ansi
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-COPY . /app/
-RUN poetry run pyinstaller --clean --onefile --name backend starter_python/main.py
+RUN --mount=type=cache,target=/root/.cache/uv \
+  --mount=type=bind,source=uv.lock,target=uv.lock \
+  --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+  uv sync --frozen --no-install-project --no-dev
 
-FROM alpine:latest
-ENV FASTAPI_ENV=production
+ADD . /app
+RUN --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen --no-dev
+
+
+FROM python:3.12-alpine
 WORKDIR /app
-COPY --from=build-stage /app/dist/backend /app/backend
-
+COPY --from=builder --chown=app:app /app /app
+ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
-CMD ["./backend"]
+CMD ["fastapi", "run", "./backend/api.py"]

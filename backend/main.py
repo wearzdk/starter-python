@@ -1,4 +1,4 @@
-from starter_python.api import app
+from backend.api import app
 
 
 if __name__ == '__main__':
